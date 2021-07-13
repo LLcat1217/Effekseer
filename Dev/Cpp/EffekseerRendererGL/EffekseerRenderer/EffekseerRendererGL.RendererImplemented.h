@@ -28,10 +28,13 @@ struct RenderStateSet
 	GLint cullFaceMode;
 	GLint blendSrc;
 	GLint blendDst;
+	GLint blendSrcAlpha;
+	GLint blendDstAlpha;
 	GLint blendEquation;
 	GLint vao;
 	GLint arrayBufferBinding;
 	GLint elementArrayBufferBinding;
+	GLint program;
 	std::array<GLint, ::Effekseer::TextureSlotMax> boundTextures;
 };
 
@@ -73,7 +76,12 @@ private:
 	VertexArray* vao_ad_lit_ = nullptr;
 	VertexArray* vao_ad_distortion_ = nullptr;
 
-	VertexArray* m_vao_wire_frame = nullptr;
+	VertexArray* vao_unlit_wire_ = nullptr;
+	VertexArray* vao_distortion_wire_ = nullptr;
+	VertexArray* vao_lit_wire_ = nullptr;
+	VertexArray* vao_ad_unlit_wire_ = nullptr;
+	VertexArray* vao_ad_distortion_wire_ = nullptr;
+	VertexArray* vao_ad_lit_wire_ = nullptr;
 
 	//! default vao (alsmot for material)
 	GLuint defaultVertexArray_ = 0;
@@ -231,7 +239,7 @@ public:
 
 	bool IsVertexArrayObjectSupported() const override;
 
-	Backend::GraphicsDeviceRef& GetIntetnalGraphicsDevice()
+	Backend::GraphicsDeviceRef& GetInternalGraphicsDevice()
 	{
 		return graphicsDevice_;
 	}
@@ -261,9 +269,13 @@ private:
 	void GenerateIndexDataStride();
 };
 
-void AssignPixelConstantBuffer(Shader* shader);
+void AddVertexUniformLayout(Effekseer::CustomVector<Effekseer::Backend::UniformLayoutElement>& uniformLayout);
 
-void AssignDistortionPixelConstantBuffer(Shader* shader);
+void AddPixelUniformLayout(Effekseer::CustomVector<Effekseer::Backend::UniformLayoutElement>& uniformLayout);
+
+void AddDistortionPixelUniformLayout(Effekseer::CustomVector<Effekseer::Backend::UniformLayoutElement>& uniformLayout);
+
+Effekseer::CustomVector<Effekseer::CustomString<char>> GetTextureLocations(EffekseerRenderer::RendererShaderType type);
 
 //----------------------------------------------------------------------------------
 //

@@ -163,20 +163,7 @@ void ManagerImplemented::StopStoppingEffects()
 
 				if (pRootInstance && pRootInstance->GetState() == INSTANCE_STATE_ACTIVE && !pRootInstance->IsFirstTime())
 				{
-					int maxcreate_count = 0;
-					bool canRemoved = true;
-					for (int i = 0; i < pRootInstance->m_pEffectNode->GetChildrenCount(); i++)
-					{
-						auto child = (EffectNodeImplemented*)pRootInstance->m_pEffectNode->GetChild(i);
-
-						if (pRootInstance->maxGenerationChildrenCount[i] > pRootInstance->m_generatedChildrenCount[i])
-						{
-							canRemoved = false;
-							break;
-						}
-					}
-
-					if (canRemoved)
+					if (!pRootInstance->AreChildrenActive())
 					{
 						// when a sound is not playing.
 						if (m_soundPlayer == nullptr || !m_soundPlayer->CheckPlayingTag(draw_set.GlobalPointer))
@@ -227,7 +214,7 @@ void ManagerImplemented::GCDrawSet(bool isRemovingManager)
 				Culling3D::SafeRelease(drawset.CullingObjectPointer);
 			}
 
-			m_RemovingDrawSets[1].erase(it++);
+			it = m_RemovingDrawSets[1].erase(it);
 		}
 		m_RemovingDrawSets[1].clear();
 	}
@@ -246,7 +233,7 @@ void ManagerImplemented::GCDrawSet(bool isRemovingManager)
 			}
 
 			m_RemovingDrawSets[1][(*it).first] = (*it).second;
-			m_RemovingDrawSets[0].erase(it++);
+			it = m_RemovingDrawSets[0].erase(it);
 		}
 		m_RemovingDrawSets[0].clear();
 	}
@@ -270,7 +257,7 @@ void ManagerImplemented::GCDrawSet(bool isRemovingManager)
 				}
 
 				m_RemovingDrawSets[0][(*it).first] = (*it).second;
-				m_DrawSets.erase(it++);
+				it = m_DrawSets.erase(it);
 			}
 			else
 			{
@@ -312,7 +299,7 @@ InstanceContainer* ManagerImplemented::CreateInstanceContainer(
 			return nullptr;
 		}
 
-		auto instance = group->CreateInstance();
+		auto instance = group->CreateRootInstance();
 		if (instance == nullptr)
 		{
 			group->IsReferencedFromInstance = false;
@@ -851,6 +838,8 @@ void ManagerImplemented::SetMatrix(Handle handle, const Matrix43& mat)
 		if (mat_ != nullptr)
 		{
 			(*mat_) = mat;
+			Vector3D t;
+			mat.GetSRT(drawSet.Scaling, drawSet.Rotation, t);
 			drawSet.CopyMatrixFromInstanceToRoot();
 			drawSet.IsParameterChanged = true;
 		}
@@ -929,14 +918,11 @@ void ManagerImplemented::SetRotation(Handle handle, float x, float y, float z)
 
 		if (mat_ != nullptr)
 		{
-			SIMD::Mat43f r;
-			SIMD::Vec3f s, t;
+			const auto t = mat_->GetTranslation();
 
-			mat_->GetSRT(s, r, t);
+			drawSet.Rotation.RotationZXY(z, x, y);
 
-			r = SIMD::Mat43f::RotationZXY(z, x, y);
-
-			*mat_ = SIMD::Mat43f::SRT(s, r, t);
+			*mat_ = SIMD::Mat43f::SRT(drawSet.Scaling, drawSet.Rotation, t);
 
 			drawSet.CopyMatrixFromInstanceToRoot();
 			drawSet.IsParameterChanged = true;
@@ -954,14 +940,11 @@ void ManagerImplemented::SetRotation(Handle handle, const Vector3D& axis, float 
 
 		if (mat_ != nullptr)
 		{
-			SIMD::Mat43f r;
-			SIMD::Vec3f s, t;
+			const auto t = mat_->GetTranslation();
 
-			mat_->GetSRT(s, r, t);
+			drawSet.Rotation.RotationAxis(axis, angle);
 
-			r = SIMD::Mat43f::RotationAxis(axis, angle);
-
-			*mat_ = SIMD::Mat43f::SRT(s, r, t);
+			*mat_ = SIMD::Mat43f::SRT(drawSet.Scaling, drawSet.Rotation, t);
 
 			drawSet.CopyMatrixFromInstanceToRoot();
 			drawSet.IsParameterChanged = true;
@@ -979,14 +962,11 @@ void ManagerImplemented::SetScale(Handle handle, float x, float y, float z)
 
 		if (mat_ != nullptr)
 		{
-			SIMD::Mat43f r;
-			SIMD::Vec3f s, t;
+			const auto t = mat_->GetTranslation();
 
-			mat_->GetSRT(s, r, t);
+			drawSet.Scaling = { x, y, z };
 
-			s = SIMD::Vec3f(x, y, z);
-
-			*mat_ = SIMD::Mat43f::SRT(s, r, t);
+			*mat_ = SIMD::Mat43f::SRT(drawSet.Scaling, drawSet.Rotation, t);
 
 			drawSet.CopyMatrixFromInstanceToRoot();
 			drawSet.IsParameterChanged = true;
@@ -1789,7 +1769,7 @@ void ManagerImplemented::Draw(const Manager::DrawParameter& drawParameter)
 		m_WorkerThreads[0].WaitForComplete();
 	}
 
-	std::lock_guard<std::mutex> lock(m_renderingMutex);
+	std::lock_guard<std::recursive_mutex> lock(m_renderingMutex);
 
 	// start to record a time
 	int64_t beginTime = ::Effekseer::GetTime();
@@ -1852,7 +1832,7 @@ void ManagerImplemented::Draw(const Manager::DrawParameter& drawParameter)
 
 void ManagerImplemented::DrawBack(const Manager::DrawParameter& drawParameter)
 {
-	std::lock_guard<std::mutex> lock(m_renderingMutex);
+	std::lock_guard<std::recursive_mutex> lock(m_renderingMutex);
 
 	// start to record a time
 	int64_t beginTime = ::Effekseer::GetTime();
@@ -1909,7 +1889,7 @@ void ManagerImplemented::DrawBack(const Manager::DrawParameter& drawParameter)
 
 void ManagerImplemented::DrawFront(const Manager::DrawParameter& drawParameter)
 {
-	std::lock_guard<std::mutex> lock(m_renderingMutex);
+	std::lock_guard<std::recursive_mutex> lock(m_renderingMutex);
 
 	// start to record a time
 	int64_t beginTime = ::Effekseer::GetTime();
@@ -2041,7 +2021,7 @@ void ManagerImplemented::DrawHandle(Handle handle, const Manager::DrawParameter&
 		m_WorkerThreads[0].WaitForComplete();
 	}
 
-	std::lock_guard<std::mutex> lock(m_renderingMutex);
+	std::lock_guard<std::recursive_mutex> lock(m_renderingMutex);
 
 	auto it = m_renderingDrawSetMaps.find(handle);
 	if (it != m_renderingDrawSetMaps.end())
@@ -2106,7 +2086,7 @@ void ManagerImplemented::DrawHandleBack(Handle handle, const Manager::DrawParame
 		m_WorkerThreads[0].WaitForComplete();
 	}
 
-	std::lock_guard<std::mutex> lock(m_renderingMutex);
+	std::lock_guard<std::recursive_mutex> lock(m_renderingMutex);
 
 	std::map<Handle, DrawSet>::iterator it = m_renderingDrawSetMaps.find(handle);
 	if (it != m_renderingDrawSetMaps.end())
@@ -2153,7 +2133,7 @@ void ManagerImplemented::DrawHandleFront(Handle handle, const Manager::DrawParam
 		m_WorkerThreads[0].WaitForComplete();
 	}
 
-	std::lock_guard<std::mutex> lock(m_renderingMutex);
+	std::lock_guard<std::recursive_mutex> lock(m_renderingMutex);
 
 	std::map<Handle, DrawSet>::iterator it = m_renderingDrawSetMaps.find(handle);
 	if (it != m_renderingDrawSetMaps.end())
@@ -2263,9 +2243,6 @@ void ManagerImplemented::EndReloadEffect(const EffectRef& effect, bool doLockThr
 		{
 			continue;
 		}
-
-		auto e = static_cast<EffectImplemented*>(effect.Get());
-		auto pGlobal = ds.GlobalPointer;
 
 		ResetAndPlayWithDataSet(ds, ds.GlobalPointer->GetUpdatedFrame());
 	}

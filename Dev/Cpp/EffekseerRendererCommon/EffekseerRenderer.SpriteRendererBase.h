@@ -103,7 +103,6 @@ protected:
 	void BeginRendering_(RENDERER* renderer, int32_t count, const efkSpriteNodeParam& param, void* userData)
 	{
 		EffekseerRenderer::StandardRendererState state;
-		state.AlphaBlend = param.BasicParameterPtr->AlphaBlend;
 		state.CullingType = ::Effekseer::CullingType::Double;
 		state.DepthTest = param.ZTest;
 		state.DepthWrite = param.ZWrite;
@@ -148,6 +147,8 @@ protected:
 		customData2Count_ = state.CustomData2Count;
 
 		renderer->GetStandardRenderer()->UpdateStateAndRenderingIfRequired(state);
+
+		count = (std::min)(count, m_renderer->GetSquareMaxCount());
 
 		renderer->GetStandardRenderer()->BeginRenderingAndRenderingIfRequired(count * 4, stride_, (void*&)m_ringBufferData);
 		m_spriteCount = 0;
